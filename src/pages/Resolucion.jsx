@@ -367,12 +367,24 @@ const Resolucion = () => {
       numParams = 3;
     }
 
+    // Mantener la regresión entrenada con todos los puntos del dataset
     const predictions = x.map(predictFunc);
-    const rSquared = calculateR2(y, predictions);
+
+    // Para el cálculo de R² (y R² ajustado) sólo usamos puntos donde la potencia > 40
+    const filteredForR2 = dataset.filter((d) => d.power > 40);
+    let rSquared = 0;
+    let nForAdjusted = n; // por defecto usamos el tamaño total
+    if (filteredForR2.length > 0) {
+      const xForR2 = filteredForR2.map((d) => (graphType === "potencia" ? d.irradiance : d.power));
+      const yForR2 = filteredForR2.map((d) => (graphType === "potencia" ? d.power : d.generacionKW));
+      const predsForR2 = xForR2.map(predictFunc);
+      rSquared = calculateR2(yForR2, predsForR2);
+      nForAdjusted = yForR2.length;
+    }
     const rmse = calculateRMSE(y, predictions);
-    const adjustedR2 = isNaN(rSquared)
+    const adjustedR2 = isNaN(rSquared) || nForAdjusted <= numParams + 1
       ? 0
-      : 1 - ((1 - rSquared) * (n - 1)) / (n - numParams - 1);
+      : 1 - ((1 - rSquared) * (nForAdjusted - 1)) / (nForAdjusted - numParams - 1);
 
     const minX = Math.min(...x);
     const maxX = Math.max(...x);
@@ -521,10 +533,17 @@ const Resolucion = () => {
         const color = colors[colorIndex % colors.length];
         const clusterLabel = clusterResult.cluster.label;
 
-        // Scatter plot para el cluster
+        // Scatter plot para el cluster (excluir puntos con potencia < 40)
+        // Nota: cuando graphType === 'potencia', la potencia está en p.y.
+        //       cuando graphType === 'generacion', la potencia está en p.x.
+        const filteredClusterPoints = clusterResult.scatterData.filter((p) => {
+          const powerValue = graphType === "potencia" ? p.y : p.x;
+          return powerValue >= 40;
+        });
+
         traces.push({
-          x: clusterResult.scatterData.map((p) => p.x),
-          y: clusterResult.scatterData.map((p) => p.y),
+          x: filteredClusterPoints.map((p) => p.x),
+          y: filteredClusterPoints.map((p) => p.y),
           mode: "markers",
           name: clusterLabel,
           marker: { color: color, size: 4, opacity: 0.6 },
@@ -547,10 +566,15 @@ const Resolucion = () => {
       return traces;
     } else {
       if (!results?.overall?.scatterData) return [];
+      const filteredOverallPoints = results.overall.scatterData.filter((p) => {
+        const powerValue = graphType === "potencia" ? p.y : p.x;
+        return powerValue >= 40;
+      });
+
       return [
         {
-          x: results.overall.scatterData.map((p) => p.x),
-          y: results.overall.scatterData.map((p) => p.y),
+          x: filteredOverallPoints.map((p) => p.x),
+          y: filteredOverallPoints.map((p) => p.y),
           mode: "markers",
           name: "Datos",
           marker: { color: "#FFA500", size: 4, opacity: 0.6 },
